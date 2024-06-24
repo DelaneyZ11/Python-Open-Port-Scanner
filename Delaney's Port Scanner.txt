@@ -1,0 +1,84 @@
+import socket
+import datetime
+def scan_ports(target, start_port, end_port, timeout=0.001):
+    open_ports = []
+    closed_ranges = []
+    errors = []
+    current_range_start = None
+    current_range_end = None
+    for port in range(start_port, end_port + 1):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        try:
+            result = sock.connect_ex((target, port))
+            if result == 0:
+                open_ports.append(port)
+                if current_range_start is not None:
+                    closed_ranges.append((current_range_start, current_range_end))
+                    current_range_start = None
+                    current_range_end = None
+            else:
+                if current_range_start is None:
+                    current_range_start = port
+                current_range_end = port
+                if result == socket.error:
+                    errors.append((port, port))
+        finally:
+            sock.close()
+    if current_range_start is not None:
+        closed_ranges.append((current_range_start, current_range_end))
+    return open_ports, closed_ranges, errors
+def format_range(range_start, range_end):
+    if range_start == range_end:
+        return f"[{range_start}]"
+    else:
+        return f"[{range_start}-{range_end}]"
+def log_results(user_target, closed_ranges, open_ports, errors, log_file, start_time):
+    with open(log_file, 'w') as file:
+        formatted_start_time = start_time.strftime("%A, %B %d %Y\n%H:%M:%S\n")
+        file.write(f"Target Acquired: {user_target}\n\n")
+        file.write(f"Scan initiated: {formatted_start_time}\n")
+        if closed_ranges:
+            formatted_closed_ranges = [format_range(start, end) for start, end in closed_ranges]
+            file.write(f"Closed port ranges on {user_target}: {', '.join(formatted_closed_ranges)}\n")
+        else:
+            file.write("No closed port ranges found during port scan.\n")
+        if open_ports:
+            file.write(f"Open ports on {user_target}: [{', '.join(map(str, open_ports))}]\n")
+        else:
+            file.write("No open ports were found during port scan.\n\n")
+        if errors:
+            formatted_errors = [f"Port {port}: {error}" for port, error in errors]
+            file.write(f"Errors detected: {', '.join(formatted_errors)}\n\n")
+        else:
+            file.write("No errors were found during port scan.\n\n")
+        end_time = datetime.datetime.now()
+        formatted_end_time = end_time.strftime("%A, %B %d %Y\n%H:%M:%S\n")
+        duration = end_time - start_time
+        file.write(f"Scan completed: {formatted_end_time}\n")
+        file.write(f"Time taken to run the scan: {duration} seconds\n\n")
+if __name__ == "__main__":
+    log_file_path = "Operalbe Scanner.txt"
+    while True:
+        start_time = datetime.datetime.now()
+        user_target = input("(Or type 'exit' to close the program.)\nPlease identify your target:  ")
+        if user_target.lower() == 'exit':
+            print("Scan completed. Results logged in 'Operable Scanner.txt'.")
+            break
+        try:
+            target_host = socket.gethostbyname(user_target)
+        except socket.error as e:
+            print(f"Error resolving target host: {e}")
+            continue
+        print(f"Scanning ports on target: {user_target} ({target_host})  \nPlease wait...\n")
+        with open(log_file_path, "a") as result_file:
+            formatted_time = start_time.strftime("%A, %B %d %Y\n%H:%M:%S\n")
+            start_port_number = 1
+            end_port_number = 1025
+            open_ports, closed_ranges, errors = scan_ports(user_target, start_port_number, end_port_number)
+            print("Open ports:", open_ports)
+            print("Closed ranges:", closed_ranges)
+            print("Errors:", errors)
+            log_results(user_target, closed_ranges, open_ports, errors, log_file_path, start_time)
+            print(f"Scan completed for {user_target} ({target_host}) at {formatted_time}")
+    print("Exiting the program.")
